@@ -7,8 +7,6 @@ using _2CaptchaAPI;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
 using OpenQA.Selenium.Chrome;
-using System;
-using System.Reflection;
 
 
 
@@ -19,94 +17,48 @@ namespace DomainChecker
         static string myAPI;
         static void Main(string[] args)
         {
-            string domainsFile = filePath("domains.txt");
+
+                //user input
+                userInput input= userInputInterface();
+            string domainsFile= input.domainsFile;
+            string popularity_Choice= input.popularity_Choice;
+            int scoreBase = input.scoreBase;
+
+
+            //open browser 
+            IWebDriver driver =null;
             try
             {
-                //create domains file .txt if not exists
-                CreateFileIfNotExists(domainsFile);
-                CreateFileIfNotExists(filePath("higherDomains.txt"));
-                CreateFileIfNotExists(filePath("lowerDomains.txt"));
-
-
-                OpenTextFile("domains.txt");
+                driver = InitializeWebDriver();
             }
-            catch (Exception) { Console.WriteLine("------------Error in .TXT file"); }
-
-          
-            Console.WriteLine(" Entre your 2Captcha API: ");
-              myAPI = Console.ReadLine();
+            catch (Exception) {    Console.WriteLine("------------Error in opening browser!");   }
 
 
-            string popularityChoice;
-            string popularity_Choice = null;
+            int numberOfDomains = File.ReadAllLines(domainsFile).Length;
+            String[] domains = null;
 
-            do
-            {
-                Console.WriteLine("\n \n 1:High popularity \n 2:Medium popularity \n\n Enter your choice : (1 or 2)");
-                popularityChoice = Console.ReadLine();
-
-                switch (popularityChoice)
-                {
-                    case "1": popularity_Choice = "High popularity"; break;
-                    case "2": popularity_Choice = "Medium popularity"; break;
-                }
-            } while ((!popularityChoice.Equals("1")) && (!popularityChoice.Equals("2")));
+            //start extracting domains file by index
+            domains = extractfile(domainsFile, driver);
 
 
 
-            Console.WriteLine(" Enter the minimum score: ");
-                int scoreBase;
+            // start the process
+            int i = 0;
+            checkDomainProcess(i, domainsFile, driver, scoreBase, popularity_Choice , domains, numberOfDomains);
+            
 
-                // Prompt the user until a valid number between 1 and 100 is entered
-                while (true)
-                {
-                    if (int.TryParse(Console.ReadLine(), out scoreBase))
-                    {
-                        if (scoreBase >= 1 && scoreBase <= 100)
-                        {
-                            // Valid number entered
-                            break;
-                        }
-                        else
-                        {
-                            Console.WriteLine("Please enter a number between 1 and 100.");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Invalid input. Please enter a valid number.");
-                    }
-                }
-
-                // Use scoreBase variable for further processing
-                Console.WriteLine($"The minimum score entered is: {scoreBase}");
-
-                IWebDriver driver=null;
-
-                try
-                {
-                    //open browser 
-                     driver = InitializeWebDriver();
-                }
-            catch (Exception) {    Console.WriteLine("------------Error in opening browser!");   } 
-
-                int i = 0;
-
-            checkDomainProcess(i, domainsFile, driver, scoreBase, popularity_Choice);
-
-
+            //end the process
             try
             {
                 closeBrowser(driver);
             }
             catch (Exception)
             {
-
+               
                 
             }
             
-            
-
+            //open the file
             OpenTextFile("higherDomains.txt");
 
             Console.WriteLine("===============");
@@ -142,83 +94,208 @@ namespace DomainChecker
                 }
             }
         }
-        static void checkDomainProcess(int index , string domainsFile, IWebDriver driver, int scoreBase, string popularity_Choice)
+        static void checkDomainProcess(int index , string domainsFile, IWebDriver driver, int scoreBase, string popularity_Choice ,string[] domains, int numberOfDomains)
         {
-            try {
-                do
+
+           
+
+            do
+            {
+                try
                 {
-                    //start extracting domains file by index
-                    String domain = extractfile(index, domainsFile, driver);
+                    //passed the captcha
+                    passeTheCaptcha(driver, domains[index], index, domainsFile);
 
-                    //find search box
-                    IWebElement searchBar = driver.FindElement(By.Id("searchBox"));
-                    searchBar.SendKeys(domain);
-
-                    //extracting captcha key 
-                    string captchaKey = extractCaptchaKey(driver);
-                   
-                    // get url 
-                    string currentUrl = driver.Url;
-
-                    //send captcha request 
-                    string code = captchaRequest(myAPI, captchaKey, currentUrl,driver);
-
-                    if (!isCaptchaReturnError(code, driver))
-                    {
-                            Console.WriteLine($"Successfully solved the CAPTCHA");
-                    }
-
-
-
-                    // Set the solved CAPTCHA in the textarea
-                    IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
-                    IWebElement recaptchaResponseElement = driver.FindElement(By.Id("g-recaptcha-response-1"));
-                    js.ExecuteScript("arguments[0].removeAttribute('style');", recaptchaResponseElement);
-                    js.ExecuteScript($"arguments[0].value = '{code}';", recaptchaResponseElement);
-
-
-                    //Submit the form
+                    //Submit 
                     IWebElement submitBtn = driver.FindElement(By.XPath("//button[contains(@onclick, 'search()')]"));
                     submitBtn.Click();
 
 
+                    //catching Popularity element
+                    string popularity = catchPopularityValue(driver);
 
-                    IWebElement popularityValue = driver.FindElement(By.Id("impactValues"));
-                    string popularity = popularityValue.GetAttribute("value");
+                    //catching Score element
+                    int ScoreValue = catchDomainScore(driver);
+                        
 
-
-
-
-                    // Find the div element with id "domainScore"
-                    IWebElement domainScoreDiv = driver.FindElement(By.Id("threatScore"));
-
-                    // Get the text content of the div element
-                    string domainScoreText = domainScoreDiv.Text;
-
-                    // Extract numeric value using regular expression
-                    Match match = Regex.Match(domainScoreText, @"\d+");
-                    int ScoreValue = 0;
-
-                    if (match.Success)
+                    try
                     {
-                        ScoreValue = int.Parse(match.Value);
+                        validDomain(domains[index], ScoreValue, scoreBase, popularity, popularity_Choice);
                     }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Error in checking domain {domains[index]}  : {e.Message}");
 
-                    validDomain(domain, ScoreValue, scoreBase, popularity, popularity_Choice);
+                    } 
 
                     driver.Navigate().Refresh();
-
-
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Error in checking domain {domains[index]}  : {e.Message}");
+                   
+                }
+                finally
+                {
+                    // Regardless of whether an exception occurred or not, always increment i
                     index++;
-
-                } while (File.ReadAllLines(domainsFile).Length > index);
-            } catch (Exception ex) { }
+                }
+                    
+            } while (numberOfDomains > index);
         }
 
 
 
+        static userInput userInputInterface()
+        {
+            string domainsFile = filePath("domains.txt");
+            try
+            {
+                //create domains file .txt if not exists
+                CreateFileIfNotExists(domainsFile);
+                CreateFileIfNotExists(filePath("higherDomains.txt"));
+                CreateFileIfNotExists(filePath("lowerDomains.txt"));
 
-     
+
+                OpenTextFile("domains.txt");
+            }
+            catch (Exception) { Console.WriteLine("------------Error in .TXT file"); }
+
+
+            Console.WriteLine(" Entre your 2Captcha API: ");
+            myAPI = Console.ReadLine();
+
+
+            string popularityChoice;
+            string popularity_Choice = null;
+
+            do
+            {
+                Console.WriteLine("\n \n 1:High popularity \n 2:Medium popularity \n\n Enter your choice : (1 or 2)");
+                popularityChoice = Console.ReadLine();
+
+                switch (popularityChoice)
+                {
+                    case "1": popularity_Choice = "High popularity"; break;
+                    case "2": popularity_Choice = "Medium popularity"; break;
+                }
+            } while ((!popularityChoice.Equals("1")) && (!popularityChoice.Equals("2")));
+
+
+
+            Console.WriteLine(" Enter the minimum score: ");
+            int scoreBase;
+
+            // Prompt the user until a valid number between 1 and 100 is entered
+            while (true)
+            {
+                if (int.TryParse(Console.ReadLine(), out scoreBase))
+                {
+                    if (scoreBase >= 1 && scoreBase <= 100)
+                    {
+                        // Valid number entered
+                        break;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Please enter a number between 1 and 100.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Invalid input. Please enter a valid number.");
+                }
+            }
+
+            // Use scoreBase variable for further processing
+            Console.WriteLine($"The minimum score entered is: {scoreBase}");
+
+
+            userInput input = new userInput(domainsFile, popularity_Choice, scoreBase);
+           
+            return input;
+        }
+
+        public class userInput
+        {
+            public string domainsFile { get; set; }
+            public string popularity_Choice { get; set; }
+            public int scoreBase { get; set; }
+
+            // Constructor
+            public userInput(string domainsFile, string popularity_Choice, int scoreBase)
+            {
+                this.domainsFile = domainsFile;
+                this.popularity_Choice = popularity_Choice;
+                this.scoreBase = scoreBase;
+            }
+        }
+
+
+
+        static string catchPopularityValue(IWebDriver driver)
+        {
+            IWebElement popularityValue = driver.FindElement(By.Id("impactValues"));
+            string popularity = popularityValue.GetAttribute("value");
+            return popularity;
+        }
+
+        static void passeTheCaptcha(IWebDriver driver, string domain, int index, string domainsFile)
+        {
+            
+
+            //find search box
+            IWebElement searchBar = driver.FindElement(By.Id("searchBox"));
+            searchBar.SendKeys(domain);
+
+            //extracting captcha key 
+            string captchaKey = extractCaptchaKey(driver);
+
+            // get url 
+            string currentUrl = driver.Url;
+
+            //send captcha request 
+            string code = captchaRequest(myAPI, captchaKey, currentUrl, driver);
+
+            if (!isCaptchaReturnError(code, driver))
+            {
+                Console.WriteLine($"Successfully solved the CAPTCHA");
+            }
+
+            // Set the solved CAPTCHA in the textarea
+            solveCaptcha(driver, code);
+        }
+
+        static void solveCaptcha(IWebDriver driver,string code)
+        {
+            IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
+            IWebElement recaptchaResponseElement = driver.FindElement(By.Id("g-recaptcha-response-1"));
+            js.ExecuteScript("arguments[0].removeAttribute('style');", recaptchaResponseElement);
+            js.ExecuteScript($"arguments[0].value = '{code}';", recaptchaResponseElement);
+        }
+
+
+        static int catchDomainScore(IWebDriver driver)
+        {
+
+            // Find the div element with id "domainScore"
+            IWebElement domainScoreDiv = driver.FindElement(By.Id("threatScore"));
+
+            // Get the text content of the div element
+            string domainScoreText = domainScoreDiv.Text;
+
+            // Extract numeric value using regular expression
+            Match match = Regex.Match(domainScoreText, @"\d+");
+            int ScoreValue = 0;
+
+            if (match.Success)
+            {
+                ScoreValue = int.Parse(match.Value);
+            }
+            return ScoreValue;
+        }
+
+
 
 
 
@@ -435,14 +512,14 @@ namespace DomainChecker
 
 
 
-        private static string extractfile(int index, string filePath, IWebDriver driver)
+        private static string[] extractfile(string filePath, IWebDriver driver)
         {
-            string result = null;
+            string[] result = null;
             try
             {
                 string[] lines = File.ReadAllLines(filePath);
 
-                if (lines.Length > 0) result = lines[index];
+                if (lines.Length > 0) result = lines;
                 else
                 {
                     Console.WriteLine($"--------------The file is empty  {filePath}");
