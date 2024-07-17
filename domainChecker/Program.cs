@@ -18,8 +18,8 @@ namespace DomainChecker
         static void Main(string[] args)
         {
 
-                //user input
-                userInput input= userInputInterface();
+            //user input
+            userInput input= userInputInterface();
             string domainsFile= input.domainsFile;
             string popularity_Choice= input.popularity_Choice;
             int scoreBase = input.scoreBase;
@@ -59,7 +59,7 @@ namespace DomainChecker
             }
             
             //open the file
-            OpenTextFile("higherDomains.txt");
+            OpenTextFile("Valid_Domains.txt");
 
             Console.WriteLine("===============");
             Console.WriteLine("process ends !");
@@ -153,9 +153,9 @@ namespace DomainChecker
             {
                 //create domains file .txt if not exists
                 CreateFileIfNotExists(domainsFile);
-                CreateFileIfNotExists(filePath("higherDomains.txt"));
-                CreateFileIfNotExists(filePath("lowerDomains.txt"));
-
+                CreateFileIfNotExists(filePath("HighScore_Domains.txt"));
+                CreateFileIfNotExists(filePath("LowScore_Domains.txt"));
+                CreateFileIfNotExists(filePath("Valid_Domains.txt"));
 
                 OpenTextFile("domains.txt");
             }
@@ -171,13 +171,13 @@ namespace DomainChecker
 
             do
             {
-                Console.WriteLine("\n \n 1:High popularity \n 2:Medium popularity \n\n Enter your choice : (1 or 2)");
+                Console.WriteLine("\n \n 1:High & Medium popularity \n 2:low & Medium popularity \n\n Enter your choice : (1 or 2)");
                 popularityChoice = Console.ReadLine();
 
                 switch (popularityChoice)
                 {
-                    case "1": popularity_Choice = "High popularity"; break;
-                    case "2": popularity_Choice = "Medium popularity"; break;
+                    case "1": popularity_Choice = "High popularity|Medium popularity"; break;
+                    case "2": popularity_Choice = "low popularity|Medium popularity"; break;
                 }
             } while ((!popularityChoice.Equals("1")) && (!popularityChoice.Equals("2")));
 
@@ -456,25 +456,45 @@ namespace DomainChecker
         static void validDomain(string domain, int ScoreValue, int scoreBase, string popularity, string popularity_Choice)
         {
             // Check if the threat score is up to 80
-            if (ScoreValue >= scoreBase && HasPopularity(popularity, popularity_Choice))
+            if (ScoreValue >= scoreBase)
             {
-                Console.WriteLine($"The domain  score is ({ScoreValue}) and {popularity_Choice}");
-                SaveDomainToFile(domain, filePath("higherDomains.txt"));
+                Console.WriteLine($"The domain score is ({ScoreValue})");
+                if (HasPopularity(popularity, popularity_Choice))
+                {
+                    Console.WriteLine($"Valid domain ....");
+                    SaveDomainToFile(domain, filePath("Valid_Domains.txt"));
+                }
+                else
+                {
+                    SaveDomainToFile(domain, filePath("HighScore_Domains.txt"));
+                }
+
             }
             else
             {
-                Console.WriteLine($"The domain  score is ({ScoreValue})");
-                SaveDomainToFile(domain, filePath("lowerDomains.txt"));
+                Console.WriteLine($"The domain score is ({ScoreValue})");
+                SaveDomainToFile(domain, filePath("LowScore_Domains.txt"));
             }
         }
 
 
-        static bool HasPopularity(string popularity,string popularity_Choice)
+        static bool HasPopularity(string popularity, string popularity_Choice)
         {
-            // Define regular expressions to match "High popularity" and "Medium popularity"
-            Regex Regex = new Regex($@"\b{Regex.Escape(popularity_Choice)}\b");
-            // Check if the input string contains either pattern
-            return Regex.IsMatch(popularity) ;
+            // Split the choices and escape each phrase
+            string[] choices = popularity_Choice.Split('|');
+            for (int i = 0; i < choices.Length; i++)
+            {
+                choices[i] = Regex.Escape(choices[i].Trim());
+            }
+
+            // Join the escaped choices with |
+            string escapedChoices = string.Join("|", choices);
+
+            // Define regular expressions to match any of the popularity choices
+            Regex regex = new Regex($@"\b(?:{escapedChoices})\b", RegexOptions.IgnoreCase);
+
+            // Check if the input string contains any of the patterns
+            return regex.IsMatch(popularity);
         }
 
 
